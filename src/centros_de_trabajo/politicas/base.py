@@ -1,4 +1,4 @@
-# Ruta: src/centros_de_trabajo/workcenters/base.py en PC LAB
+# Ruta: src/centros_de_trabajo/politicas/base.py en PC LAB - reemplazar TODO el archivo
 import abc
 import enum
 from centros_de_trabajo.core.ordenes import Orden, OrdenDeTrabajo
@@ -10,8 +10,7 @@ class EstadoKiosco(enum.Enum):
     ABORTADO = "abortado"
     NO_DISPONIBLE = "no_disponible"
 
-
-class CentroDeTrabajo(abc.ABC):
+class EstacionDeTrabajo(abc.ABC):
     nombre_odoo: str = ""
     operaciones_soportadas: list[str] = []
 

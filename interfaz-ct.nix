@@ -7,14 +7,14 @@ let
     export DISPLAY=:0
     export XAUTHORITY=/home/pos001/.Xauthority
     export PYTHONPATH="${./src}"
-    exec ${pythonConPyQt}/bin/python -m centros_de_trabajo
+    exec ${pythonConPyQt}/bin/python -m kiosco_torneria
   '';
 
 in {
   environment.systemPackages = [ ventaScript pythonConPyQt ];
 
   systemd.user.services.interfaz-pos = {
-    description = "Servicio Kiosco de Venta";
+    description = "Servicio Kiosco para taller";
     wantedBy = [ "graphical-session.target" ];
     partOf = [ "graphical-session.target" ];
 

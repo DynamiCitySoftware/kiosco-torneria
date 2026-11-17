@@ -3,12 +3,8 @@ from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QListWidget, QPus
 
 from centros_de_trabajo.backends.base import Backend
 from centros_de_trabajo.core.ordenes import OrdenDeTrabajo
-from centros_de_trabajo.politicas_ct.base import CentroDeTrabajo
-from centros_de_trabajo.politicas_ct.horno.centro_horno import CentroHorno
+from centros_de_trabajo.politicas.base import CentroDeTrabajo
 
-
-def construir_registro_centros() -> list[CentroDeTrabajo]:
-    return [CentroHorno()]
 
 
 def filtrar_ordenes_por_centro(

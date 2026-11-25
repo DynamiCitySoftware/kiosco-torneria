@@ -5,10 +5,13 @@
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
-      python = pkgs.python3.withPackages (ps: [ ps.pyqt6 ps.pytest ps.pyserial]);
+      python = pkgs.python3.withPackages (ps: [ ps.pyqt6 ps.pytest ps.pyserial ]);
     in {
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ python ];
+        packages = [
+          python
+          pkgs.ugs
+        ];
         shellHook = ''export PYTHONPATH="$PWD/src:$PYTHONPATH"'';
       };
 

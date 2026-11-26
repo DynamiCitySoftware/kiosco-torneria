@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from centros_de_trabajo.estaciones.inventario import listar_puertos
+from centros_de_trabajo.estaciones.inventario_puertos import listar_puertos
 from centros_de_trabajo.estaciones.plato.catalogo_programas import (
     EntradaCatalogo,
     listar_programas,

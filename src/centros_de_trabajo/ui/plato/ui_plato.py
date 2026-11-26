@@ -17,21 +17,22 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from centros_de_trabajo.estaciones.inventario_puertos import listar_puertos
+from centros_de_trabajo.estaciones.inventario import listar_puertos
 from centros_de_trabajo.estaciones.plato.catalogo_programas import (
     EntradaCatalogo,
     listar_programas,
 )
 
 
-# VALOR_GENERICO_BAUD es genérico con valor inicial real tuyo: 115200 de tu captura.
-# VALOR_GENERICO_TIMEOUT es genérico: 2.0 segundos para welcome y consola.
+# VALOR REAL tuyo de tu captura y tu prueba UGS: 115200 baud.
 BAUDIOS_POR_DEFECTO = 115200
 TIMEOUT_SERIE_SEG = 2.0
+# VALOR REAL probado por vos en UGS: jog +1 en X a F102.
+COMANDO_MOVER_PRUEBA = "$J=G21G91X1F102"
 
 
 class VentanaPlato(QMainWindow):
-    """Lista programas, permite cargarlos, conecta serie y consola $$."""
+    """Lista programas, conecta serie, consola $$ y un solo MOVER PRUEBA en X."""
 
     def __init__(self, carpeta_programas: Path, kiosco: bool = False) -> None:
         super().__init__()
@@ -87,7 +88,6 @@ class VentanaPlato(QMainWindow):
         layout.addWidget(self._boton_cargar)
         layout.addWidget(self._boton_actualizar)
 
-        # Consola serie estilo UGS
         self._consola_vista = QPlainTextEdit()
         self._consola_vista.setReadOnly(True)
         self._consola_vista.setPlaceholderText("Consola GRBL: conectá y enviá $$")
@@ -102,6 +102,10 @@ class VentanaPlato(QMainWindow):
         layout.addWidget(self._consola_vista)
         layout.addLayout(fila_consola)
 
+        # Botón de prueba física: un solo comando fijo, no texto libre.
+        self._boton_mover_prueba = QPushButton("MOVER PRUEBA X+ [F5]")
+        layout.addWidget(self._boton_mover_prueba)
+
         contenedor.setLayout(layout)
         self.setCentralWidget(contenedor)
 
@@ -112,6 +116,7 @@ class VentanaPlato(QMainWindow):
         self._boton_conectar.clicked.connect(self._al_conectar)
         self._boton_enviar.clicked.connect(self._al_enviar_consola)
         self._consola_entrada.returnPressed.connect(self._al_enviar_consola)
+        self._boton_mover_prueba.clicked.connect(self._al_mover_prueba)
 
         self.recargar_puertos()
         self.recargar()
@@ -191,7 +196,6 @@ class VentanaPlato(QMainWindow):
         except ValueError:
             self._etiqueta_controlador.setText("Controller state: BAUD INVALIDO")
             return
-        # Cierra anterior si había
         try:
             if self._serie is not None:
                 self._serie.close()
@@ -206,8 +210,6 @@ class VentanaPlato(QMainWindow):
             return
         try:
             s = serial.Serial(str(ruta), baud, timeout=TIMEOUT_SERIE_SEG)
-            # No limpiamos de más: GRBL manda welcome solo al reset.
-            # Esperamos primera línea no vacía.
             limite = time.monotonic() + TIMEOUT_SERIE_SEG + 2.0
             welcome = None
             while time.monotonic() < limite:
@@ -241,16 +243,24 @@ class VentanaPlato(QMainWindow):
         if self._serie is None:
             self._consola_vista.appendPlainText("! no hay conexión, presioná CONECTAR primero")
             return
-        # Solo consulta en este paso: $$, $I, $G, ?. Bloqueamos G/M de movimiento.
-        # VALOR_GENERICO_PERMITIDOS es genérico: ej ["$$", "$I", "$G", "?"] para este MVP.
         upper = texto.upper()
-        if upper.startswith("G") or upper.startswith("M") or upper.startswith("G0") or upper.startswith("G1"):
+        if upper.startswith("G") or upper.startswith("M") or upper.startswith("$J"):
             self._consola_vista.appendPlainText(f"! bloqueado en consola MVP: {texto}")
             print(f"[ui_plato] consola bloquea movimiento {texto!r}", flush=True)
             return
+        self._enviar_y_leer(texto)
+
+    def _al_mover_prueba(self) -> None:
+        if self._serie is None:
+            self._etiqueta_controlador.setText("Controller state: SIN CONEXION PARA MOVER")
+            print("[ui_plato] mover_prueba sin conexion", flush=True)
+            return
+        print(f"[ui_plato] mover_prueba envia {COMANDO_MOVER_PRUEBA!r}", flush=True)
+        self._consola_vista.appendPlainText(f"> {COMANDO_MOVER_PRUEBA} [MOVER PRUEBA]")
+        self._enviar_y_leer(COMANDO_MOVER_PRUEBA)
+
+    def _enviar_y_leer(self, texto: str) -> None:
         try:
-            self._consola_vista.appendPlainText(f"> {texto}")
-            print(f"[ui_plato] consola envia {texto!r}", flush=True)
             self._serie.write((texto + "\n").encode())
             limite = time.monotonic() + TIMEOUT_SERIE_SEG + 2.0
             while time.monotonic() < limite:
@@ -261,12 +271,10 @@ class VentanaPlato(QMainWindow):
                 if txt == "":
                     continue
                 self._consola_vista.appendPlainText(f"< {txt}")
-                print(f"[ui_plato] consola recibe {txt!r}", flush=True)
-                if txt.strip().lower() in ("ok", "error"):
-                    break
-                # $$ devuelve muchas líneas y termina en ok
-                if len(self._consola_vista.toPlainText()) > 20000:
+                print(f"[ui_plato] recibe {txt!r}", flush=True)
+                bajo = txt.strip().lower()
+                if bajo == "ok" or bajo.startswith("error") or "alarm" in bajo:
                     break
         except Exception as e:
             self._consola_vista.appendPlainText(f"! error serie: {e}")
-            print(f"[ui_plato] consola error {e}", flush=True)
+            print(f"[ui_plato] error serie {e}", flush=True)

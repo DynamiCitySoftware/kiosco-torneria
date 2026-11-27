@@ -5,9 +5,9 @@ from pathlib import Path
 import time
 
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -28,7 +29,6 @@ from centros_de_trabajo.estaciones.plato.catalogo_programas import (
 
 BAUDIOS_POR_DEFECTO = 115200
 TIMEOUT_SERIE_SEG = 2.0
-# Límites reales que pediste: X hasta 200, Y hasta 1, origen en 0.
 LIMITE_X_MAX = 200.0
 LIMITE_Y_MAX = 1.0
 
@@ -38,6 +38,8 @@ class VentanaPlato(QMainWindow):
 
     def __init__(self, carpeta_programas: Path, kiosco: bool = False) -> None:
         super().__init__()
+        # carpeta_programas es VALOR GENERICO, en desarrollo ej:
+        # Path("src/centros_de_trabajo/estaciones/plato/programas")
         self._carpeta = carpeta_programas
         self._entradas: list[EntradaCatalogo] = []
         self.programa_cargado: EntradaCatalogo | None = None
@@ -53,10 +55,12 @@ class VentanaPlato(QMainWindow):
         contenedor = QWidget()
         layout = QVBoxLayout()
 
+        # 1) Firmware + puertos + baudios: queda arriba como está.
         fila_conexion = QHBoxLayout()
         self._combo_firmware = QComboBox()
         self._combo_firmware.addItems(["GRBL"])
         self._combo_puerto = QComboBox()
+        self._combo_puerto.setMinimumWidth(320)
         self._combo_baud = QComboBox()
         self._combo_baud.addItems(["115200", "9600"])
         self._combo_baud.setCurrentText(str(BAUDIOS_POR_DEFECTO))
@@ -66,7 +70,7 @@ class VentanaPlato(QMainWindow):
         fila_conexion.addWidget(QLabel("Firmware:"))
         fila_conexion.addWidget(self._combo_firmware)
         fila_conexion.addWidget(QLabel("Port:"))
-        fila_conexion.addWidget(self._combo_puerto)
+        fila_conexion.addWidget(self._combo_puerto, stretch=1)
         fila_conexion.addWidget(QLabel("Baud:"))
         fila_conexion.addWidget(self._combo_baud)
         fila_conexion.addWidget(self._boton_conectar)
@@ -74,65 +78,100 @@ class VentanaPlato(QMainWindow):
         layout.addLayout(fila_conexion)
         layout.addWidget(self._etiqueta_controlador)
 
+        linea1 = QFrame()
+        linea1.setFrameShape(QFrame.Shape.HLine)
+        layout.addWidget(linea1)
+
+        # Zona media: 2) Programas a la izquierda, 4) Control manual a la derecha.
+        medio = QHBoxLayout()
+
+        panel_programas = QWidget()
+        panel_programas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        lay_prog = QVBoxLayout()
+        lay_prog.addWidget(QLabel("2) Programas"))
         self._etiqueta_estado = QLabel("Sin programa cargado")
         self._lista = QListWidget()
         self._visor = QPlainTextEdit()
         self._visor.setReadOnly(True)
+        self._visor.setMaximumBlockCount(2000)
         self._etiqueta_detalle = QLabel("Detalle: -")
+        self._etiqueta_detalle.setWordWrap(True)
         self._boton_cargar = QPushButton("CARGAR")
         self._boton_actualizar = QPushButton("ACTUALIZAR LISTA")
-        layout.addWidget(self._etiqueta_estado)
-        layout.addWidget(self._lista)
-        layout.addWidget(self._visor)
-        layout.addWidget(self._etiqueta_detalle)
-        layout.addWidget(self._boton_cargar)
-        layout.addWidget(self._boton_actualizar)
+        lay_prog.addWidget(self._etiqueta_estado)
+        lay_prog.addWidget(self._lista)
+        lay_prog.addWidget(self._visor)
+        lay_prog.addWidget(self._etiqueta_detalle)
+        lay_prog.addWidget(self._boton_cargar)
+        lay_prog.addWidget(self._boton_actualizar)
+        panel_programas.setLayout(lay_prog)
 
-        self._consola_vista = QPlainTextEdit()
-        self._consola_vista.setReadOnly(True)
-        self._consola_vista.setPlaceholderText("Consola GRBL: conectá y enviá $$")
-        self._consola_entrada = QLineEdit()
-        self._consola_entrada.setText("$$")
-        self._boton_enviar = QPushButton("ENVIAR")
-        fila_consola = QHBoxLayout()
-        fila_consola.addWidget(self._consola_entrada)
-        fila_consola.addWidget(self._boton_enviar)
-        layout.addWidget(QLabel("Consola:"))
-        layout.addWidget(self._consola_vista)
-        layout.addLayout(fila_consola)
-
-        # Panel jog como tu captura, sin Z. Reemplaza MOVER PRUEBA.
-        self._check_teclado = QCheckBox("Enable Keyboard Movement")
+        panel_jog = QWidget()
+        panel_jog.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        lay_jog = QVBoxLayout()
+        lay_jog.addWidget(QLabel("4) Control manual"))
+        lay_jog.addWidget(QLabel("X Step size:"))
         self._step_x = QDoubleSpinBox()
         self._step_x.setRange(0.1, 10.0)
         self._step_x.setValue(1.0)
+        lay_jog.addWidget(self._step_x)
+        lay_jog.addWidget(QLabel("Y Step size:"))
         self._step_y = QDoubleSpinBox()
         self._step_y.setRange(0.1, 10.0)
         self._step_y.setValue(1.0)
+        lay_jog.addWidget(self._step_y)
+        lay_jog.addWidget(QLabel("Feed rate:"))
         self._feed = QDoubleSpinBox()
         self._feed.setRange(1.0, 1000.0)
         self._feed.setValue(102.0)
+        lay_jog.addWidget(self._feed)
         self._btn_x_menos = QPushButton("X-")
         self._btn_x_mas = QPushButton("X+")
         self._btn_y_menos = QPushButton("Y-")
         self._btn_y_mas = QPushButton("Y+")
+        lay_jog.addWidget(self._btn_x_menos)
+        lay_jog.addWidget(self._btn_x_mas)
+        lay_jog.addWidget(self._btn_y_menos)
+        lay_jog.addWidget(self._btn_y_mas)
         self._etiqueta_pos = QLabel("Pos X: 0.0 / 200 | Pos Y: 0.0 / 1")
-        layout.addWidget(self._check_teclado)
-        fila_step = QHBoxLayout()
-        fila_step.addWidget(QLabel("X Step size:"))
-        fila_step.addWidget(self._step_x)
-        fila_step.addWidget(QLabel("Y Step size:"))
-        fila_step.addWidget(self._step_y)
-        fila_step.addWidget(QLabel("Feed rate:"))
-        fila_step.addWidget(self._feed)
-        layout.addLayout(fila_step)
-        fila_jog = QHBoxLayout()
-        fila_jog.addWidget(self._btn_x_menos)
-        fila_jog.addWidget(self._btn_x_mas)
-        fila_jog.addWidget(self._btn_y_menos)
-        fila_jog.addWidget(self._btn_y_mas)
-        layout.addLayout(fila_jog)
-        layout.addWidget(self._etiqueta_pos)
+        self._etiqueta_pos.setWordWrap(True)
+        lay_jog.addWidget(self._etiqueta_pos)
+        lay_jog.addStretch(1)
+        panel_jog.setLayout(lay_jog)
+
+        medio.addWidget(panel_programas, stretch=1)
+        medio.addWidget(panel_jog, stretch=1)
+        layout.addLayout(medio, stretch=1)
+
+        linea2 = QFrame()
+        linea2.setFrameShape(QFrame.Shape.HLine)
+        layout.addWidget(linea2)
+
+        # 3) Consola: ocupa solo la mitad horizontal izquierda.
+        fila_consola_titulo = QLabel("3) Consola")
+        layout.addWidget(fila_consola_titulo)
+        fila_consola = QHBoxLayout()
+        panel_consola = QWidget()
+        panel_consola.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        lay_cons = QVBoxLayout()
+        self._consola_vista = QPlainTextEdit()
+        self._consola_vista.setReadOnly(True)
+        self._consola_vista.setPlaceholderText("Consola GRBL: conectá y enviá $$")
+        self._consola_vista.setMinimumHeight(140)
+        self._consola_entrada = QLineEdit()
+        self._consola_entrada.setText("$$")
+        self._boton_enviar = QPushButton("ENVIAR")
+        fila_envio = QHBoxLayout()
+        fila_envio.addWidget(self._consola_entrada, stretch=1)
+        fila_envio.addWidget(self._boton_enviar)
+        lay_cons.addWidget(self._consola_vista)
+        lay_cons.addLayout(fila_envio)
+        panel_consola.setLayout(lay_cons)
+        relleno_consola = QWidget()
+        relleno_consola.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        fila_consola.addWidget(panel_consola, stretch=1)
+        fila_consola.addWidget(relleno_consola, stretch=1)
+        layout.addLayout(fila_consola)
 
         contenedor.setLayout(layout)
         self.setCentralWidget(contenedor)
@@ -315,6 +354,10 @@ class VentanaPlato(QMainWindow):
                     continue
                 txt = raw.decode(errors="replace").rstrip("\r\n")
                 if txt == "":
+                    continue
+                if txt.startswith("<"):
+                    self._consola_vista.appendPlainText(f"< {txt}")
+                    print(f"[ui_plato] estado {txt!r}", flush=True)
                     continue
                 self._consola_vista.appendPlainText(f"< {txt}")
                 print(f"[ui_plato] recibe {txt!r}", flush=True)
